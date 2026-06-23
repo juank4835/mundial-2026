@@ -476,7 +476,6 @@ onAuthStateChanged(auth,(user)=>{
   canEdit=!!user;
   editing=false;
   document.body.classList.toggle("viewer",!canEdit);
-  document.body.classList.toggle("editor",!!canEdit);
   renderAuth(user);
   renderGroup();
 });
