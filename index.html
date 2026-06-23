@@ -163,6 +163,31 @@
     .score input{width:42px;height:42px;font-size:18px}
     .team-cell .nm{max-width:110px}
   }
+
+  /* ===== Toggle de vista ===== */
+  .seg{display:inline-flex;background:rgba(255,255,255,.12);border-radius:11px;padding:4px;margin-top:14px;gap:4px}
+  .seg button{background:transparent;border:none;color:#cbd5e1;font-weight:700;font-size:13px;padding:8px 18px;border-radius:8px;cursor:pointer}
+  .seg button.active{background:#fff;color:var(--ink)}
+  .navbar.rounds .navbar-inner{justify-content:flex-start}
+  .navbar.rounds button{width:auto;padding:0 16px;height:40px}
+
+  /* ===== Bracket ===== */
+  .bk-match{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
+  .bk-h{font-size:10.5px;color:var(--muted);font-weight:800;letter-spacing:.6px;text-transform:uppercase;padding:8px 14px;background:var(--panel-2);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+  .bk-side{display:flex;align-items:center;gap:10px;padding:13px 14px}
+  .bk-side + .bk-side{border-top:1px solid var(--line)}
+  .bk-side .nm{font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bk-side .ph{color:var(--muted);font-weight:600;font-size:13.5px}
+  .bk-side.win{background:var(--clasif-soft)}
+  .bk-side.win .nm{color:var(--clasif)}
+  .bk-side .chk{margin-left:auto;color:var(--clasif);font-weight:900;font-size:14px}
+  body:not(.viewer) .bk-side.pick{cursor:pointer}
+  body:not(.viewer) .bk-side.pick:hover{background:var(--accent-soft)}
+  .bk-third{padding:9px 14px;border-top:1px dashed var(--line);background:var(--panel-2);display:flex;align-items:center;gap:8px}
+  .bk-third label{font-size:11px;color:var(--muted);font-weight:700;flex:0 0 auto}
+  .bk-third input{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13.5px}
+  .bk-third input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .bk-note{font-size:12px;color:var(--ink-2);padding:0 2px 14px}
 </style>
 </head>
 <body class="viewer">
@@ -172,23 +197,36 @@
     <p class="kicker">Canadá · México · Estados Unidos</p>
     <h1>Mundial 2026 — Grupos</h1>
     <p>Los resultados se actualizan en vivo para todos. Solo el editor puede modificarlos.</p>
+    <div class="seg" id="viewSeg">
+      <button data-view="grupos" class="active">Grupos</button>
+      <button data-view="bracket">Eliminatorias</button>
+    </div>
   </div>
 </header>
 
-<nav class="navbar"><div class="navbar-inner" id="nav"></div></nav>
+<nav class="navbar" id="groupNav"><div class="navbar-inner" id="nav"></div></nav>
+<nav class="navbar rounds" id="roundNav" style="display:none"><div class="navbar-inner" id="roundNavInner"></div></nav>
 
 <div class="wrap">
-  <div class="group-head">
-    <button class="nav-arrow" id="prevG" title="Grupo anterior">‹</button>
-    <div class="title"><div class="lbl">Fase de grupos</div><h2 id="groupTitle">Grupo A</h2></div>
-    <button class="nav-arrow" id="nextG" title="Grupo siguiente">›</button>
+  <div id="gruposView">
+    <div class="group-head">
+      <button class="nav-arrow" id="prevG" title="Grupo anterior">‹</button>
+      <div class="title"><div class="lbl">Fase de grupos</div><h2 id="groupTitle">Grupo A</h2></div>
+      <button class="nav-arrow" id="nextG" title="Grupo siguiente">›</button>
+    </div>
+    <div id="group"></div>
+    <div class="actions editor-only">
+      <button class="btn danger" id="resetGroup">Borrar resultados de este grupo</button>
+    </div>
   </div>
 
-  <div id="group"></div>
-
-  <div class="actions editor-only">
-    <button class="btn danger" id="resetGroup">Borrar resultados de este grupo</button>
+  <div id="bracketView" style="display:none">
+    <div class="group-head"><div class="title"><div class="lbl">Fase final</div><h2 id="roundTitle">Dieciseisavos</h2></div></div>
+    <div class="bk-note">Los 1.º y 2.º de cada grupo se llenan solos. En cada partido, el editor toca al equipo que gana para que avance.</div>
+    <div id="bracketRounds"></div>
+    <div class="card" id="thirdsCard"></div>
   </div>
+
   <div class="saved" id="saved"></div>
 </div>
 
@@ -277,7 +315,7 @@ const LETTERS = []; for(let k=0;k<12;k++) LETTERS.push(letter(k));
 function freshState(){
   const groups={}, results={};
   LETTERS.forEach(L=>{ groups[L]=DEFAULT_NAMES[L].slice(); results[L]=PAIRS.map(()=>({h:"",a:""})); });
-  return {groups, results};
+  return {groups, results, bracket:{winners:{}, thirds:{}}};
 }
 let state = loadCache() || freshState();
 let active = "A";
@@ -302,6 +340,10 @@ function mergeWithDefaults(remote){
   }
   if(remote && remote.results){
     LETTERS.forEach(L=>{ if(Array.isArray(remote.results[L])) for(let m=0;m<6;m++){ const r=remote.results[L][m]||{}; base.results[L][m]={h:(r.h==null?"":String(r.h)),a:(r.a==null?"":String(r.a))}; } });
+  }
+  if(remote && remote.bracket){
+    base.bracket.winners = (remote.bracket.winners && typeof remote.bracket.winners==='object') ? remote.bracket.winners : {};
+    base.bracket.thirds = (remote.bracket.thirds && typeof remote.bracket.thirds==='object') ? remote.bracket.thirds : {};
   }
   return base;
 }
@@ -335,6 +377,148 @@ function flashSaved(){
   const el=document.getElementById("saved");
   el.style.color="var(--clasif)"; el.textContent="Guardado en vivo ✓";
   clearTimeout(savedTimer); savedTimer=setTimeout(()=>{el.textContent="";},1200);
+}
+
+// ===== Eliminatorias (cuadro final, numeración oficial FIFA) =====
+let currentView="grupos";
+let currentRound="r32";
+const W=(g)=>({t:'w',g}), RU=(g)=>({t:'r',g}), T3=(gs)=>({t:'3',gs}), MW=(m)=>({t:'mw',m}), ML=(m)=>({t:'ml',m});
+const MATCHES={
+  73:[RU('A'),RU('B')],
+  74:[W('E'),T3(['A','B','C','D','F'])],
+  75:[W('F'),RU('C')],
+  76:[W('C'),RU('F')],
+  77:[W('I'),T3(['C','D','F','G','H'])],
+  78:[RU('E'),RU('I')],
+  79:[W('A'),T3(['C','E','F','H','I'])],
+  80:[W('L'),T3(['E','H','I','J','K'])],
+  81:[W('D'),T3(['B','E','F','I','J'])],
+  82:[W('G'),T3(['A','E','H','I','J'])],
+  83:[RU('K'),RU('L')],
+  84:[W('H'),RU('J')],
+  85:[W('B'),T3(['E','F','G','I','J'])],
+  86:[W('J'),RU('H')],
+  87:[W('K'),T3(['D','E','I','J','L'])],
+  88:[RU('D'),RU('G')],
+  89:[MW(74),MW(77)], 90:[MW(73),MW(75)], 91:[MW(76),MW(78)], 92:[MW(79),MW(80)],
+  93:[MW(83),MW(84)], 94:[MW(81),MW(82)], 95:[MW(86),MW(88)], 96:[MW(85),MW(87)],
+  97:[MW(89),MW(90)], 98:[MW(93),MW(94)], 99:[MW(91),MW(92)], 100:[MW(95),MW(96)],
+  101:[MW(97),MW(98)], 102:[MW(99),MW(100)],
+  103:[ML(101),ML(102)], 104:[MW(101),MW(102)]
+};
+const ROUNDS=[
+  {key:'r32',name:'Dieciseisavos',short:'16avos',ms:[73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88]},
+  {key:'r16',name:'Octavos',short:'8vos',ms:[89,90,91,92,93,94,95,96]},
+  {key:'qf',name:'Cuartos',short:'4tos',ms:[97,98,99,100]},
+  {key:'sf',name:'Semifinales',short:'Semis',ms:[101,102]},
+  {key:'fin',name:'Final',short:'Final',ms:[104,103]}
+];
+
+function thirdName(n){ return (state.bracket.thirds && state.bracket.thirds[n]) || ""; }
+function hasThird(n){ const m=MATCHES[n]; return m && (m[0].t==='3'||m[1].t==='3'); }
+// Resuelve un slot a {name} (equipo concreto) o {label} (texto provisional). matchN = partido donde vive el slot.
+function resolveSlot(slot, matchN){
+  if(!slot) return {label:"—"};
+  if(slot.t==='w'){ return {name:computeStandings(slot.g)[0].name}; }
+  if(slot.t==='r'){ return {name:computeStandings(slot.g)[1].name}; }
+  if(slot.t==='3'){ const tn=thirdName(matchN); return tn?{name:tn}:{label:"3.º · "+slot.gs.join("/")}; }
+  if(slot.t==='mw'){ const w=state.bracket.winners[slot.m]; if(w==='a'||w==='b') return resolveSlot(MATCHES[slot.m][w==='a'?0:1], slot.m); return {label:"Ganador "+slot.m}; }
+  if(slot.t==='ml'){ const w=state.bracket.winners[slot.m]; if(w==='a'||w==='b') return resolveSlot(MATCHES[slot.m][w==='a'?1:0], slot.m); return {label:"Perdedor "+slot.m}; }
+  return {label:"—"};
+}
+function writeBracket(){ if(!canEdit) return; set(ref(db,'torneo/bracket'), state.bracket).then(flashSaved).catch(onWriteErr); }
+
+function renderRoundNav(){
+  const wrap=document.getElementById("roundNavInner");
+  if(!wrap) return;
+  wrap.innerHTML="";
+  ROUNDS.forEach(rd=>{
+    const b=document.createElement("button");
+    b.textContent=rd.short; if(rd.key===currentRound) b.className="active";
+    b.onclick=()=>{ currentRound=rd.key; renderBracket(); window.scrollTo({top:0,behavior:"smooth"}); };
+    wrap.appendChild(b);
+  });
+}
+function sideHTML(res, isWinner){
+  const inner = res.name
+    ? flagHTML(res.name)+'<span class="nm">'+escapeHtml(res.name)+'</span>'
+    : '<span class="ph">'+escapeHtml(res.label||"—")+'</span>';
+  return inner+(isWinner?'<span class="chk">✓</span>':'');
+}
+function renderBracket(){
+  renderRoundNav();
+  const rd=ROUNDS.find(r=>r.key===currentRound);
+  document.getElementById("roundTitle").textContent=rd.name;
+  const cont=document.getElementById("bracketRounds");
+  cont.innerHTML="";
+  rd.ms.forEach(n=>{
+    const slots=MATCHES[n];
+    const rA=resolveSlot(slots[0],n), rB=resolveSlot(slots[1],n);
+    const win=state.bracket.winners[n];
+    const card=document.createElement("div");
+    card.className="bk-match";
+    const titleLeft = (n===103?"Tercer puesto":(n===104?"FINAL":"Partido "+n));
+    let html='<div class="bk-h"><span>'+titleLeft+'</span>'+(win?'<span style="color:var(--clasif)">Pasa '+(win==='a'?'arriba':'abajo')+'</span>':'')+'</div>';
+    html+='<div class="bk-side '+(win==='a'?'win':'')+'" data-n="'+n+'" data-side="a">'+sideHTML(rA,win==='a')+'</div>';
+    html+='<div class="bk-side '+(win==='b'?'win':'')+'" data-n="'+n+'" data-side="b">'+sideHTML(rB,win==='b')+'</div>';
+    if(hasThird(n)){
+      const tslot = slots[0].t==='3'?slots[0]:slots[1];
+      html+='<div class="bk-third editor-only"><label>3.º:</label><input type="text" data-third="'+n+'" value="'+escapeHtml(thirdName(n))+'" placeholder="Equipo (uno de: '+tslot.gs.join(" / ")+')"></div>';
+    }
+    card.innerHTML=html;
+    cont.appendChild(card);
+  });
+  if(canEdit){
+    cont.querySelectorAll(".bk-side").forEach(el=>{
+      el.classList.add("pick");
+      el.onclick=()=>{
+        const n=el.getAttribute("data-n"), side=el.getAttribute("data-side");
+        if(state.bracket.winners[n]===side) delete state.bracket.winners[n];
+        else state.bracket.winners[n]=side;
+        saveCache(); writeBracket(); renderBracket();
+      };
+    });
+    cont.querySelectorAll("input[data-third]").forEach(inp=>{
+      inp.oninput=()=>{
+        const n=inp.getAttribute("data-third");
+        if(!state.bracket.thirds) state.bracket.thirds={};
+        const v=inp.value.trim();
+        if(v) state.bracket.thirds[n]=v; else delete state.bracket.thirds[n];
+        saveCache(); writeBracket();
+      };
+    });
+  }
+  renderThirds();
+}
+function renderThirds(){
+  const card=document.getElementById("thirdsCard");
+  if(!card) return;
+  if(currentRound!=='r32'){ card.style.display='none'; return; }
+  card.style.display='';
+  const rows=LETTERS.map(L=>{ const r=computeStandings(L)[2]; return {L, name:r.name, pj:r.pj, pts:r.pts, dif:r.dif, gf:r.gf}; });
+  rows.sort((a,b)=> (b.pts-a.pts)||(b.dif-a.dif)||(b.gf-a.gf)||a.L.localeCompare(b.L));
+  let html='<div class="card-head"><h3>Mejores terceros</h3></div>'+
+    '<div class="bk-note" style="padding:10px 16px 0;margin:0">Clasifican los 8 primeros (en verde). Orden: puntos · diferencia · goles a favor.</div>'+
+    '<div class="table-scroll"><table><thead><tr><th>#</th><th class="name-col">Equipo</th><th>Gr</th><th>PJ</th><th>DIF</th><th>GF</th><th>PTS</th></tr></thead><tbody>';
+  rows.forEach((x,i)=>{
+    const dif=(x.dif>0?"+":"")+x.dif;
+    html+='<tr class="'+(i<8?'q':'')+'"><td class="pos"><span class="badge">'+(i+1)+'</span></td>'+
+      '<td class="name-col"><div class="team-cell">'+flagHTML(x.name,"flag-sm")+'<span class="nm">'+escapeHtml(x.name||"—")+'</span></div></td>'+
+      '<td>'+x.L+'</td><td>'+x.pj+'</td><td class="dif">'+dif+'</td><td>'+x.gf+'</td><td class="pts">'+x.pts+'</td></tr>';
+  });
+  html+='</tbody></table></div>';
+  card.innerHTML=html;
+}
+function renderActiveView(){ if(currentView==='bracket') renderBracket(); else renderGroup(); }
+function setView(v){
+  currentView=v;
+  document.getElementById("gruposView").style.display = v==='grupos'?'':'none';
+  document.getElementById("bracketView").style.display = v==='bracket'?'':'none';
+  document.getElementById("groupNav").style.display = v==='grupos'?'':'none';
+  document.getElementById("roundNav").style.display = v==='bracket'?'':'none';
+  document.querySelectorAll("#viewSeg button").forEach(b=>b.classList.toggle("active", b.getAttribute("data-view")===v));
+  renderActiveView();
+  window.scrollTo({top:0,behavior:"smooth"});
 }
 
 // ---- Render ----
@@ -443,6 +627,7 @@ function renderMatches(){
 // Actualiza la vista cuando llega data remota, sin pisar lo que el editor está escribiendo
 function applyRemoteSoft(){
   const typing = document.activeElement && document.activeElement.tagName==="INPUT";
+  if(currentView==='bracket'){ if(!typing) renderBracket(); return; }
   if(!typing){ renderGroup(); return; }
   // está escribiendo: solo refresca tabla y los inputs que no tienen el foco
   const L=active;
@@ -477,7 +662,7 @@ onAuthStateChanged(auth,(user)=>{
   editing=false;
   document.body.classList.toggle("viewer",!canEdit);
   renderAuth(user);
-  renderGroup();
+  renderActiveView();
 });
 
 // Modal
@@ -508,8 +693,11 @@ document.getElementById("resetGroup").onclick=()=>{
   saveCache(); renderGroup(); writeResults(active);
 };
 
+// Toggle de vista (Grupos / Eliminatorias)
+document.querySelectorAll("#viewSeg button").forEach(b=>{ b.onclick=()=>setView(b.getAttribute("data-view")); });
+
 // Primer render (con cache/defaults mientras Firebase responde)
-renderGroup();
+setView("grupos");
 </script>
 </body>
 </html>
