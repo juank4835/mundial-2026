@@ -222,9 +222,9 @@
 
   <div id="bracketView" style="display:none">
     <div class="group-head"><div class="title"><div class="lbl">Fase final</div><h2 id="roundTitle">Dieciseisavos</h2></div></div>
+    <div class="card" id="thirdsCard"></div>
     <div class="bk-note">Los 1.º y 2.º de cada grupo se llenan solos. En cada partido, el editor toca al equipo que gana para que avance.</div>
     <div id="bracketRounds"></div>
-    <div class="card" id="thirdsCard"></div>
   </div>
 
   <div class="saved" id="saved"></div>
@@ -493,7 +493,6 @@ function renderBracket(){
 function renderThirds(){
   const card=document.getElementById("thirdsCard");
   if(!card) return;
-  if(currentRound!=='r32'){ card.style.display='none'; return; }
   card.style.display='';
   const rows=LETTERS.map(L=>{ const r=computeStandings(L)[2]; return {L, name:r.name, pj:r.pj, pts:r.pts, dif:r.dif, gf:r.gf}; });
   rows.sort((a,b)=> (b.pts-a.pts)||(b.dif-a.dif)||(b.gf-a.gf)||a.L.localeCompare(b.L));
