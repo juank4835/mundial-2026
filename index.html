@@ -189,8 +189,8 @@
   .bk-third input{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13.5px}
   .bk-third input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
   .bk-note{font-size:12px;color:var(--ink-2);padding:0 2px 14px}
-  #cuadroWrap{overflow:auto;-webkit-overflow-scrolling:touch;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:6px}
-  #cuadroWrap svg{display:block}
+  #cuadroWrap{overflow:hidden;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:6px}
+  #cuadroWrap svg{display:block;width:100%;height:auto}
 </style>
 </head>
 <body class="viewer">
@@ -233,7 +233,7 @@
 
   <div id="cuadroView" style="display:none">
     <div class="group-head"><div class="title"><div class="lbl">Fase final</div><h2>Cuadro</h2></div></div>
-    <div class="bk-note">Vista de solo lectura, tipo llave. Los ganadores se marcan en la pestaña "Eliminatorias". Desliza para ver todo el cuadro.</div>
+    <div class="bk-note">Vista de solo lectura, tipo llave. Se ajusta a la pantalla. Los ganadores se marcan en la pestaña "Eliminatorias".</div>
     <div id="cuadroWrap"><div id="bracketSVG"></div></div>
   </div>
 
@@ -609,7 +609,8 @@ function renderBracketSVG(){
     extra+=flag(flagCode(champ.name), fx4+(bw-fw)/2, cyc-fh/2);
     extra+='<text x="'+(fx4+bw/2)+'" y="'+(cyc+fh/2+13)+'" text-anchor="middle" font-size="10" font-weight="800" fill="#15803d" letter-spacing="1">CAMPEÓN</text>';
   }
-  const svg='<svg width="'+totalW+'" height="'+(totalH+ (champ&&champ.name?40:0))+'" viewBox="0 0 '+totalW+' '+(totalH+(champ&&champ.name?40:0))+'" xmlns="http://www.w3.org/2000/svg">'+conns+boxes+extra+'</svg>';
+  const vbH = totalH + (champ&&champ.name?40:0);
+  const svg='<svg viewBox="0 0 '+totalW+' '+vbH+'" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">'+conns+boxes+extra+'</svg>';
   document.getElementById("bracketSVG").innerHTML=svg;
 }
 
