@@ -189,6 +189,8 @@
   .bk-third input{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13.5px}
   .bk-third input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
   .bk-note{font-size:12px;color:var(--ink-2);padding:0 2px 14px}
+  #cuadroWrap{overflow:auto;-webkit-overflow-scrolling:touch;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:6px}
+  #cuadroWrap svg{display:block}
 </style>
 </head>
 <body class="viewer">
@@ -201,6 +203,7 @@
     <div class="seg" id="viewSeg">
       <button data-view="grupos" class="active">Grupos</button>
       <button data-view="bracket">Eliminatorias</button>
+      <button data-view="cuadro">Cuadro</button>
     </div>
   </div>
 </header>
@@ -226,6 +229,12 @@
     <div class="bk-note">Los 1.º, 2.º y los mejores terceros se asignan solos según las tablas (tabla oficial FIFA). Es provisional hasta que terminen los grupos. El editor toca al equipo que gana para que avance.</div>
     <div id="bracketRounds"></div>
     <div class="card" id="thirdsCard"></div>
+  </div>
+
+  <div id="cuadroView" style="display:none">
+    <div class="group-head"><div class="title"><div class="lbl">Fase final</div><h2>Cuadro</h2></div></div>
+    <div class="bk-note">Vista de solo lectura, tipo llave. Los ganadores se marcan en la pestaña "Eliminatorias". Desliza para ver todo el cuadro.</div>
+    <div id="cuadroWrap"><div id="bracketSVG"></div></div>
   </div>
 
   <div class="saved" id="saved"></div>
@@ -535,11 +544,85 @@ function renderThirds(){
   html+='</tbody></table></div>';
   card.innerHTML=html;
 }
-function renderActiveView(){ if(currentView==='bracket') renderBracket(); else renderGroup(); }
+// ===== Cuadro visual (tipo llave ESPN, SVG) =====
+function renderBracketSVG(){
+  computeThirdAlloc();
+  const bw=54, mh=54, rowH=27, STEP=72, MT=16, CW=100, fw=34, fh=23;
+  const colX = k => 14 + k*CW;
+  const cols = [
+    {k:0, ms:[74,77,73,75,83,84,81,82]},
+    {k:1, ms:[89,90,93,94]},
+    {k:2, ms:[97,98]},
+    {k:3, ms:[101]},
+    {k:4, ms:[104]},
+    {k:5, ms:[102]},
+    {k:6, ms:[99,100]},
+    {k:7, ms:[91,92,95,96]},
+    {k:8, ms:[76,78,79,80,86,88,85,87]}
+  ];
+  const fes={89:[74,77],90:[73,75],93:[83,84],94:[81,82],91:[76,78],92:[79,80],95:[86,88],96:[85,87],97:[89,90],98:[93,94],99:[91,92],100:[95,96],101:[97,98],102:[99,100],104:[101,102]};
+  const mK={}; cols.forEach(c=>c.ms.forEach(n=>mK[n]=c.k));
+  const cy={};
+  cols[0].ms.forEach((n,i)=> cy[n]=MT+mh/2+i*STEP);
+  cols[8].ms.forEach((n,i)=> cy[n]=MT+mh/2+i*STEP);
+  function setCy(n){ if(cy[n]!=null) return cy[n]; const ch=fes[n]; cy[n]=(setCy(ch[0])+setCy(ch[1]))/2; return cy[n]; }
+  Object.keys(fes).forEach(n=>setCy(+n));
+  const totalH = MT*2 + 8*STEP, totalW = colX(8)+bw+14;
+
+  let conns="", boxes="";
+  // Conexiones (detrás de las cajas)
+  Object.keys(fes).forEach(p=>{
+    p=+p; const [c1,c2]=fes[p];
+    const pk=mK[p], ck=mK[c1], px=colX(pk), cx=colX(ck);
+    let childEdge, parentEdge;
+    if(px>cx){ childEdge=cx+bw; parentEdge=px; } else { childEdge=cx; parentEdge=px+bw; }
+    const midX=(childEdge+parentEdge)/2;
+    const L='stroke="#cbd5e1" stroke-width="1.5" fill="none"';
+    conns+='<path '+L+' d="M'+childEdge+' '+cy[c1]+' H'+midX+' V'+cy[c2]+' M'+childEdge+' '+cy[c2]+' H'+midX+'"/>';
+    conns+='<path '+L+' d="M'+midX+' '+cy[p]+' H'+parentEdge+'"/>';
+  });
+  // Cajas
+  function flag(code,x,y){
+    if(!code) return '<rect x="'+x+'" y="'+y+'" width="'+fw+'" height="'+fh+'" rx="2" fill="#e2e8f0"/>';
+    return '<image href="https://flagcdn.com/'+code+'.svg" x="'+x+'" y="'+y+'" width="'+fw+'" height="'+fh+'" preserveAspectRatio="xMidYMid slice"/>'+
+           '<rect x="'+x+'" y="'+y+'" width="'+fw+'" height="'+fh+'" rx="2" fill="none" stroke="rgba(15,23,42,.18)"/>';
+  }
+  cols.forEach(c=> c.ms.forEach(n=>{
+    const bx=colX(c.k), top=cy[n]-mh/2;
+    const rA=resolveSlot(MATCHES[n][0],n), rB=resolveSlot(MATCHES[n][1],n);
+    const win=state.bracket.winners[n];
+    boxes+='<rect x="'+bx+'" y="'+top+'" width="'+bw+'" height="'+mh+'" rx="7" fill="#ffffff" stroke="#e5e9f0"/>';
+    if(win==='a') boxes+='<rect x="'+bx+'" y="'+top+'" width="'+bw+'" height="'+rowH+'" rx="7" fill="#e9f8ee"/>';
+    if(win==='b') boxes+='<rect x="'+bx+'" y="'+(top+rowH)+'" width="'+bw+'" height="'+rowH+'" rx="7" fill="#e9f8ee"/>';
+    boxes+='<line x1="'+bx+'" y1="'+(top+rowH)+'" x2="'+(bx+bw)+'" y2="'+(top+rowH)+'" stroke="#eef2f8"/>';
+    const fx=bx+(bw-fw)/2;
+    boxes+=flag(rA.name?flagCode(rA.name):null, fx, top+(rowH-fh)/2);
+    boxes+=flag(rB.name?flagCode(rB.name):null, fx, top+rowH+(rowH-fh)/2);
+    if(rA.name) boxes+='<title>'+escapeHtml(rA.name)+(rB.name?(' vs '+escapeHtml(rB.name)):'')+'</title>';
+  }));
+  // Etiqueta FINAL y campeón
+  const fx4=colX(4);
+  let extra='<text x="'+(fx4+bw/2)+'" y="'+(cy[104]-mh/2-8)+'" text-anchor="middle" font-size="11" font-weight="800" fill="#475569" letter-spacing="1">FINAL</text>';
+  const champ=(state.bracket.winners[104]) ? resolveSlot(MATCHES[104][state.bracket.winners[104]==='a'?0:1],104) : null;
+  if(champ && champ.name){
+    const cyc=cy[104]+mh/2+34;
+    extra+=flag(flagCode(champ.name), fx4+(bw-fw)/2, cyc-fh/2);
+    extra+='<text x="'+(fx4+bw/2)+'" y="'+(cyc+fh/2+13)+'" text-anchor="middle" font-size="10" font-weight="800" fill="#15803d" letter-spacing="1">CAMPEÓN</text>';
+  }
+  const svg='<svg width="'+totalW+'" height="'+(totalH+ (champ&&champ.name?40:0))+'" viewBox="0 0 '+totalW+' '+(totalH+(champ&&champ.name?40:0))+'" xmlns="http://www.w3.org/2000/svg">'+conns+boxes+extra+'</svg>';
+  document.getElementById("bracketSVG").innerHTML=svg;
+}
+
+function renderActiveView(){
+  if(currentView==='bracket') renderBracket();
+  else if(currentView==='cuadro') renderBracketSVG();
+  else renderGroup();
+}
 function setView(v){
   currentView=v;
   document.getElementById("gruposView").style.display = v==='grupos'?'':'none';
   document.getElementById("bracketView").style.display = v==='bracket'?'':'none';
+  document.getElementById("cuadroView").style.display = v==='cuadro'?'':'none';
   document.getElementById("groupNav").style.display = v==='grupos'?'':'none';
   document.getElementById("roundNav").style.display = v==='bracket'?'':'none';
   document.querySelectorAll("#viewSeg button").forEach(b=>b.classList.toggle("active", b.getAttribute("data-view")===v));
@@ -653,6 +736,7 @@ function renderMatches(){
 // Actualiza la vista cuando llega data remota, sin pisar lo que el editor está escribiendo
 function applyRemoteSoft(){
   const typing = document.activeElement && document.activeElement.tagName==="INPUT";
+  if(currentView==='cuadro'){ renderBracketSVG(); return; }
   if(currentView==='bracket'){ if(!typing) renderBracket(); return; }
   if(!typing){ renderGroup(); return; }
   // está escribiendo: solo refresca tabla y los inputs que no tienen el foco
